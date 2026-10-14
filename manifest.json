@@ -1,12 +1,15 @@
 {
-  "background_color": "#ffffff",
-  "dir": "ltr",
-  "display": "standalone",
-  "name": "Herbamobile",
-  "orientation": "any",
-  "scope": "/",
-  "short_name": "sergiojosejose14-ops.github",
-  "start_url": "/",
-  "theme_color": "#ffffff",
-  "id": "herbamobile"
+"name": "Metin2 2D Mobile",
+"short_name": "Metin2",
+"start_url": "./index.html",
+"display": "standalone",
+"background_color": "#27ae60",
+"theme_color": "#0a0a0a",
+"icons": [
+{
+"src": "https://via.placeholder.com/512",
+"sizes": "512x512",
+"type": "image/png"
+}
+ ]
 }
