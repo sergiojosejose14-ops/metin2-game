@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Metin2 2D Mobile</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+body, html { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }
+
+/* TELAS DO MENU E JOGO */
+.screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; align-items: center; justify-content: 
+
+center; }
+.active { display: flex; }
+
+/* MENU PRINCIPAL */
+#main-menu { background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.8)), #1c2b18; }
+.title { font-size: 32px; font-weight: bold; color: #f39c12; text-shadow: 2px 2px 8px #000; margin-bottom: 5px; text-transform: uppercase; }
+.subtitle { font-size: 14px; color: #bdc3c7; margin-bottom: 30px; }
+
+.btn-menu { width: 220px; padding: 14px; margin: 8px; background: #c0392b; color: white; border: 2px solid #f39c12; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+.btn-menu:active { transform: scale(0.96); background: #a93226; }
+
+
+/* INTERFACE DO JOGO (HUD) */
+#hud { position: absolute; top: 0; left: 0; width: 100%; padding: 10px; background: rgba(0,0,0,0.6); display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; pointer-events: none; z-index: 10; }
+.bar-container { width: 100px; height: 14px; background: #333; border: 1px solid #fff; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
+.bar-hp { width: 100%; height: 100%; background: #e74c3c; }
+.bar-mp { width: 100%; height: 100%; background: #3498db; }
+
+/* CANVAS DO JOGO */
+canvas { display: block; width: 100%; height: 100%; background: #27ae60; }
+
+/* CONTROLOS MÓVEIS */
+.controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; pointer-events: none; z-index: 10; }
+.touch-btn { pointer-events: auto; width: 75px; height: 75px; background: rgba(0, 0, 0, 0.5); border: 2px solid #f39c12; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; color: white; }
+.touch-btn:active { background: rgba(243, 156, 18, 0.6); }
+
+/* MODAL / SOBRE */
+#instructions { background: rgba(0,0,0,0.9); padding: 20px; border-radius: 10px; border: 1px solid #f39c12; max-width: 80%; text-align: center; }
+</style>
+</head>
+
+<body>
+
+<!-- 1. MENU PRINCIPAL -->
+<div id="main-menu" class="screen active">
+<div class="title">METIN2 2D</div>
+<div class="subtitle">Mobile Edition</div>
+
+<div class="btn-menu" onclick="startGame()">⚔️ JOGAR</div>
+<div class="btn-menu" onclick="showHelp()">📜 COMO JOGAR</div>
+</div>
+
+<!-- 2. TELA DE AJUDA -->
+<div id="help-screen" class="screen">
+<div id="instructions">
+<h3 style="color: #f39c12; margin-bottom: 10px;">Como Jogar:</h3>
+<p style="font-size: 14px; line-height: 1.5; margin-bottom: 15px;">
+
+- Usa o toque no ecrã para mover o Guerreiro.<br>
+- Toca no botão de ⚔️ (Ataque) perto da Pedra Metin para a destruir.<br>
+- Derrota inimigos, destrói a Metin e apanha Yang (moedas)!
+</p>
+<div class="btn-menu" style="width: 100%;" onclick="showMenu()">VOLTAR</div>
+</div>
+</div>
+
+<!-- 3. TELA DO JOGO -->
+<div id="game-screen" class="screen">
+<div id="hud">
+<div>
+HP: <div class="bar-container"><div id="hp-bar" class="bar-hp"></div></div><br>
+MP: <div class="bar-container"><div id="mp-bar" class="bar-mp"></div></div>
+
+</div>
+<div style="text-align: right;">
+<span style="color: #f1c40f;">💰 Yang: <span id="yang-txt">0</span></span><br>
+<span style="color: #2ecc71;">Nv. <span id="lvl-txt">1</span></span>
+</div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="controls">
+<div style="font-size: 11px; color: rgba(255,255,255,0.7); align-self: flex-end;">Toque para mover</div>
+<div class="touch-btn" id="btn-attack" onclick="atacar()">⚔️</div>
+</div>
+</div>
+
+<script>
+// NAVEGAÇÃO DOS MENUS
+function showScreen(screenId) {
+document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+document.getElementById(screenId).classList.add('active');
+}
+
+function showMenu() { showScreen('main-menu'); }
+function showHelp() { showScreen('help-screen'); }
+
+// LÓGICA DO JOGO
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let gameRunning = false;
+
+let yang = 0;
+let nivel = 1;
+
+let player = { x: 0, y: 0, size: 18, speed: 4, targetX: 0, targetY: 0 };
+let metin = { x: 0, y: 0, size: 35, hp: 100, maxHp: 100 };
+let yangsNoChao = [];
+
+function resizeCanvas() {
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+if(!gameRunning) {
+player.x = canvas.width / 2;
+player.y = canvas.height / 2 + 50;
+player.targetX = player.x;
+player.targetY = player.y;
+metin.x = canvas.width / 2;
+metin.y = canvas.height / 3;
+}
+
+}
+window.addEventListener('resize', resizeCanvas);
+
+function startGame() {
+showScreen('game-screen');
+resizeCanvas();
+gameRunning = true;
+gameLoop();
+}
+
+// Movimento por toque
+canvas.addEventListener('touchstart', (e) => {
+let touch = e.touches[0];
+player.targetX = touch.clientX;
+player.targetY = touch.clientY;
+});
+
+canvas.addEventListener('click', (e) => {
+player.targetX = e.clientX;
+player.targetY = e.clientY;
+
+});
+
+function atacar() {
+let dist = Math.hypot(player.x - metin.x, player.y - metin.y);
+if (dist < 80 && metin.hp > 0) {
+metin.hp -= 15;
+if (metin.hp <= 0) {
+metin.hp = 0;
+// Gerar Yang no chão
+for(let i = 0; i < 5; i++) {
+yangsNoChao.push({
+x: metin.x + (Math.random() * 60 - 30),
+y: metin.y + (Math.random() * 60 - 30),
+val: 100
+});
+}
+setTimeout(() => { metin.hp = metin.maxHp; }, 3000); // Metin renasce
+}
+
+}
+}
+
+function update() {
+// Mover jogador até ao ponto tocado
+let dx = player.targetX - player.x;
+let dy = player.targetY - player.y;
+let dist = Math.hypot(dx, dy);
+
+if (dist > 5) {
+player.x += (dx / dist) * player.speed;
+player.y += (dy / dist) * player.speed;
+}
+
+// Apanhar Yang no chão
+yangsNoChao.forEach((y, index) => {
+let d = Math.hypot(player.x - y.x, player.y - y.y);
+if (d < 25) {
+yang += y.val;
+document.getElementById('yang-txt').innerText = 
+
+yang;
+yangsNoChao.splice(index, 1);
+}
+});
+}
+
+function draw() {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+// Relva / Cenário
+ctx.fillStyle = "#27ae60";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+// Desenhar Yangs no chão
+yangsNoChao.forEach(y => {
+ctx.fillStyle = "#f1c40f";
+ctx.beginPath();
+ctx.arc(y.x, y.y, 6, 0, Math.PI * 2);
+ctx.fill();
+});
+
+
+// Desenhar Pedra Metin (se viva)
+if (metin.hp > 0) {
+ctx.fillStyle = "#8e44ad"; // Cor Roxa Metin
+ctx.beginPath();
+ctx.arc(metin.x, metin.y, metin.size, 0, Math.PI * 2);
+ctx.fill();
+ctx.lineWidth = 3;
+ctx.strokeStyle = "#4a235a";
+ctx.stroke();
+
+// Barra de Vida da Metin
+ctx.fillStyle = "black";
+ctx.fillRect(metin.x - 30, metin.y - 50, 60, 8);
+ctx.fillStyle = "#e74c3c";
+ctx.fillRect(metin.x - 30, metin.y - 50, (metin.hp / metin.maxHp) * 60, 8);
+}
+
+// Desenhar Jogador (Guerreiro)
+ctx.fillStyle = "#3498db";
+ctx.beginPath();
+ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+ctx.fill();
+ctx.lineWidth = 2;
+ctx.strokeStyle = "#ffffff";
+ctx.stroke();
+}
+
+function gameLoop() {
+if (!gameRunning) return;
+update();
+draw();
+requestAnimationFrame(gameLoop);
+}
+</script>
+</body>
+</html>
+
